@@ -3225,6 +3225,227 @@ function void_use_elim_pass!(linfo::LambdaInfo, sv)
     return
 end
 
+# function collect_dbg_info(code)
+#     len = length(code)
+#     infos = Vector{Any}(len)
+#     info = Any[nothing]
+#     for i in 1:len
+#         ex = code[i]
+#         if (isa(ex, LineNumberNode) ||
+#             (isa(ex, Expr) && (ex::Expr).head === :line))
+#             info = copy(info)
+#             info[end] = ex
+#         elseif isa(ex, Expr) && (ex::Expr).head === :meta &&
+#             !isempty((ex::Expr).args)
+#             ex = ex::Expr
+#             args = ex.args
+#             arg1 = args[1]
+#             if arg1 === :push_loc
+#                 info = copy(info)
+#                 push!(info, ex)
+#                 push!(info, nothing)
+#             elseif arg1 === :pop_loc
+#                 info = copy(info)
+#                 if length(info) < 3
+#                     println(code)
+#                     ccall(:abort, Void, ())
+#                 end
+#                 pop!(info)
+#                 pop!(info)
+#             end
+#         end
+#         infos[i] = info
+#     end
+#     if length(info) != 1
+#         println(code)
+#         ccall(:abort, Void, ())
+#     end
+#     return infos
+# end
+
+# function collect_bounds_info(code, inbounds=false)
+#     len = length(code)
+#     ib_infos = Vector{Bool}(len)
+#     enable_infos = Vector{Bool}(len)
+#     inbounds_stack = [inbounds]
+#     boundscheck_depth = 0
+#     is_inbounds = inbounds
+#     is_enabled = true
+#     for i in 1:len
+#         ex = code[i]
+#         if !isa(ex, Expr)
+#             ib_infos[i] = is_inbounds
+#             enable_infos[i] = is_enabled
+#             continue
+#         end
+#         ex = ex::Expr
+#         head = ex.head
+#         args = ex.args
+#         if head === :boundscheck
+#             arg1 = args[1]
+#             if !is_enabled
+#                 if !(arg1 === :pop)
+#                     boundscheck_depth += 1
+#                 elseif boundscheck_depth == 0
+#                     is_enabled = true
+#                 else
+#                     boundscheck_depth -= 1
+#                 end
+#             elseif !(arg1 === :pop)
+#                 is_enabled = !is_inbounds
+#             end
+#         elseif is_enabled && head === :inbounds
+#             arg1 = args[1]
+#             if arg1 === true
+#                 push!(inbounds_stack, true)
+#                 is_inbounds = true
+#             elseif arg1 === false
+#                 if !inbounds_stack[end]
+#                     is_inbounds = false
+#                 end
+#                 push!(inbounds_stack, false)
+#             else
+#                 # pop
+#                 inbounds_len = length(inbounds_stack)
+#                 if inbounds_len <= 1
+#                     println(code)
+#                     ccall(:abort, Void, ())
+#                 end
+#                 pop!(inbounds_stack)
+#                 inbounds_len -= 1
+#                 if inbounds_len == 1
+#                     is_inbounds = inbounds_stack[end]
+#                 else
+#                     is_inbounds = inbounds_stack[end] || inbounds_stack[end - 1]
+#                 end
+#             end
+#         end
+#         ib_infos[i] = is_inbounds
+#         enable_infos[i] = is_enabled
+#     end
+#     if length(inbounds_stack) != 1
+#         println(code)
+#         ccall(:abort, Void, ())
+#     end
+#     return ib_infos, enable_infos
+# end
+
+# function collect_meta_info(linfo::LambdaInfo, code::Array{Any,1})
+#     len = length(code)
+#     code = copy(code)
+#     dbg_info = collect_dbg_info(code)
+
+#     bounds_info = collect_bounds_info(code, false)
+#     inbounds_info = (linfo.propagate_inbounds ?
+#                      collect_bounds_info(code, true) : bounds_info)
+#     return (code, dbg_info, bounds_info, inbounds_info)
+# end
+
+# function compare_meta_info(info1, info2)
+#     dbg_compare = function (dbg1, dbg2)
+#         if length(dbg1) != length(dbg2)
+#             return false
+#         end
+#         if dbg1[end] != dbg2[end]
+#             return false
+#         end
+#         for i in 2:2:length(dbg1)
+#             if dbg1[i] != dbg2[i]
+#                 return false
+#             end
+#         end
+#         return true
+#     end
+#     _assert = function (cond, i, msg)
+#         if !cond
+#             println(msg)
+#             println(i)
+#             if i > 0
+#                 println("code1[i]")
+#                 println(code1[i])
+#                 println("code2[i]")
+#                 println(code2[i])
+#                 println("dbg1[i]")
+#                 println(dbg_info1[i])
+#                 println("dbg2[i]")
+#                 println(dbg_info2[i])
+
+#                 println("ib1[i]")
+#                 println(ib_info1[i])
+#                 println("ib2[i]")
+#                 println(ib_info2[i])
+#                 println("en1[i]")
+#                 println(en_info1[i])
+#                 println("en2[i]")
+#                 println(en_info2[i])
+
+#                 println("iib1[i]")
+#                 println(iib_info1[i])
+#                 println("iib2[i]")
+#                 println(iib_info2[i])
+#                 println("ien1[i]")
+#                 println(ien_info1[i])
+#                 println("ien2[i]")
+#                 println(ien_info2[i])
+#             end
+#             println("code1")
+#             println(code1)
+#             println("code2")
+#             println(code2)
+#             println("dbg1")
+#             println(dbg_info1)
+#             println("dbg2")
+#             println(dbg_info2)
+
+#             println("ib1")
+#             println(ib_info1)
+#             println("ib2")
+#             println(ib_info2)
+#             println("en1")
+#             println(en_info1)
+#             println("en2")
+#             println(en_info2)
+
+#             println("iib1")
+#             println(iib_info1)
+#             println("iib2")
+#             println(iib_info2)
+#             println("ien1")
+#             println(ien_info1)
+#             println("ien2")
+#             println(ien_info2)
+#             ccall(:abort, Void, ())
+#         end
+#     end
+#     code1, dbg_info1, (ib_info1, en_info1), (iib_info1, ien_info1) = info1
+#     code2, dbg_info2, (ib_info2, en_info2), (iib_info2, ien_info2) = info2
+#     len1 = length(code1)
+#     len2 = length(code2)
+#     _assert(len1 == len2, 0, "length")
+#     for i in 1:len1
+#         ex = code1[i]
+#         ex2 = code2[i]
+#         if ex === nothing || isa(ex, SSAValue)
+#             _assert(ex2 === nothing, i, "ex2 === nothing")
+#             continue
+#         elseif ((isa(ex, Expr) && is_meta_expr(ex::Expr)) ||
+#                 isa(ex, LineNumberNode))
+#             continue
+#         end
+#         if !en_info1[i]
+#             _assert(ex2 === nothing || isa(ex2, LabelNode), i,
+#                     "ex2 === nothing || isa(ex2, LabelNode)")
+#             continue
+#         end
+#         _assert(!(ex2 === nothing), i, "!(ex2 === nothing)")
+#         _assert(dbg_compare(dbg_info1[i], dbg_info2[i]), i, "dbg")
+#         _assert(ib_info1[i] == ib_info2[i], i, "ib")
+#         _assert(en_info1[i] == en_info2[i], i, "en")
+#         _assert(iib_info1[i] == iib_info2[i], i, "iib")
+#         _assert(ien_info1[i] == ien_info2[i], i, "ien")
+#     end
+# end
+
 function meta_elim_pass!(linfo::LambdaInfo, code::Array{Any,1})
     # 1. Remove place holders
     #
@@ -3265,6 +3486,7 @@ function meta_elim_pass!(linfo::LambdaInfo, code::Array{Any,1})
     #    `Expr(:boundscheck)` (e.g. when they don't enclose any non-meta
     #    expressions). Those are a little harder to detect and are hopefully
     #    not too common.
+    # meta_info1 = collect_meta_info(linfo, code)
     do_coverage = coverage_enabled()
     check_bounds = JLOptions().check_bounds
 
@@ -3474,6 +3696,8 @@ function meta_elim_pass!(linfo::LambdaInfo, code::Array{Any,1})
             continue
         end
     end
+    # meta_info2 = collect_meta_info(linfo, code)
+    # compare_meta_info(meta_info1, meta_info2)
     filter!(x->x!==nothing, code)
 end
 
